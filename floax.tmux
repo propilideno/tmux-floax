@@ -16,5 +16,6 @@ tmux setenv -g FLOAX_TITLE "$(tmux_option_or_fallback '@floax-title' "${DEFAULT_
 tmux setenv -g FLOAX_CHANGE_PATH "$(tmux_option_or_fallback '@floax-change-path' 'true')" 
 tmux setenv -g FLOAX_SESSION_NAME "$(tmux_option_or_fallback '@floax-session-name' "${DEFAULT_SESSION_NAME}")"
 tmux setenv -g FLOAX_HIDE_TITLE "$(tmux_option_or_fallback '@floax-hide-title' 'false')"
+tmux setenv -g FLOAX_CLIPBOARD "$(tmux_option_or_fallback '@floax-clipboard' 'on')"
 
 eval "$(tmux showenv -s)"

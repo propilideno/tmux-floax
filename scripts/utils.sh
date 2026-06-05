@@ -21,9 +21,73 @@ CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLOAX_CHANGE_PATH=$(envvar_value FLOAX_CHANGE_PATH)
 FLOAX_TITLE=$(envvar_value FLOAX_TITLE)
 FLOAX_HIDE_TITLE=$(envvar_value FLOAX_HIDE_TITLE)
+FLOAX_CLIPBOARD=$(envvar_value FLOAX_CLIPBOARD)
 DEFAULT_TITLE='FloaX: C-M-s 󰘕   C-M-b 󰁌   C-M-f 󰊓   C-M-r 󰑓   C-M-e 󱂬   C-M-d '
 FLOAX_SESSION_NAME=$(envvar_value FLOAX_SESSION_NAME)
 DEFAULT_SESSION_NAME='scratch'
+
+# Detect a system clipboard command available on the tmux server host.
+# tmux popups do not forward OSC 52 clipboard escape sequences to the real
+# terminal, so copying inside the floating pane silently fails. Piping the
+# selection straight to a clipboard utility via copy-pipe sidesteps OSC 52
+# entirely, since the command runs on the server rather than relying on
+# escape-sequence passthrough.
+detect_clipboard_command() {
+    if command -v pbcopy >/dev/null 2>&1; then
+        echo "pbcopy"
+    elif [ -n "$WAYLAND_DISPLAY" ] && command -v wl-copy >/dev/null 2>&1; then
+        echo "wl-copy"
+    elif command -v xclip >/dev/null 2>&1; then
+        echo "xclip -selection clipboard -in"
+    elif command -v xsel >/dev/null 2>&1; then
+        echo "xsel --clipboard --input"
+    elif command -v clip.exe >/dev/null 2>&1; then
+        echo "clip.exe"
+    fi
+}
+
+# Wire copy-mode yanks to the system clipboard so copying works inside the
+# floating popup. Honors @floax-clipboard:
+#   on/auto (default) - detect a clipboard tool and pipe selections to it
+#   off               - leave the user's copy-mode bindings untouched
+#   <command>         - use the given command as the clipboard target
+setup_clipboard() {
+    local mode="$FLOAX_CLIPBOARD"
+    if [ -z "$mode" ]; then
+        mode="on"
+    fi
+    if [ "$mode" = "off" ] || [ "$mode" = "false" ]; then
+        return
+    fi
+
+    # Enable OSC 52 too; harmless and helps terminals that do support it.
+    tmux set-option -g set-clipboard on
+
+    local clipboard_command
+    case "$mode" in
+        on|auto|true)
+            clipboard_command="$(detect_clipboard_command)"
+            ;;
+        *)
+            clipboard_command="$mode"
+            ;;
+    esac
+
+    if [ -z "$clipboard_command" ]; then
+        return
+    fi
+
+    local table
+    for table in copy-mode copy-mode-vi; do
+        tmux bind-key -T "$table" Enter \
+            send-keys -X copy-pipe-and-cancel "$clipboard_command"
+        tmux bind-key -T "$table" MouseDragEnd1Pane \
+            send-keys -X copy-pipe-and-cancel "$clipboard_command"
+    done
+    # vi-style yank key
+    tmux bind-key -T copy-mode-vi y \
+        send-keys -X copy-pipe-and-cancel "$clipboard_command"
+}
 
 set_bindings() {
     tmux bind -n C-M-s run "$CURRENT_DIR/zoom-options.sh in"
@@ -70,6 +134,8 @@ tmux_popup() {
     if [ -z "$FLOAX_SESSION_NAME" ]; then
         FLOAX_SESSION_NAME="$DEFAULT_SESSION_NAME"
     fi
+
+    setup_clipboard
     # TODO: make this optional:
     current_dir=$(tmux display -p '#{pane_current_path}')
     scratch_path=$(tmux display -t "$FLOAX_SESSION_NAME" -p '#{pane_current_path}')

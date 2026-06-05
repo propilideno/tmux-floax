@@ -83,6 +83,14 @@ set -g @floax-title 'floax'
 
 # Hide the title bar and pane border status by modifying this option
 set -g @floax-hide-title 'true'
+
+# Clipboard support inside the floating pane.
+# tmux popups don't forward OSC 52 clipboard sequences to the terminal,
+# so floax pipes copy-mode selections straight to a system clipboard tool.
+# 'on' (default) auto-detects pbcopy / wl-copy / xclip / xsel / clip.exe.
+# Set it to a custom command to override, or 'off' to leave your own
+# copy-mode bindings untouched.
+set -g @floax-clipboard 'on'
 ```
 
 ## Known issues 🐞
